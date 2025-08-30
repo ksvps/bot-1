@@ -28,13 +28,6 @@ jobs:
         with:
           node-version: '22'
 
-      # --- Init project + install mineflayer ---
-      - name: Setup mineflayer project
-        run: |
-          npm init -y
-          npm install mineflayer
-
-    
       # 4. Install Docker Compose
       - name: Install Docker Compose
         run: |
