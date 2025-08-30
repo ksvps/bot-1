@@ -20,13 +20,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0   # allow commits back
-
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22.x"
-          check-latest: true
-        
+    
       # 4. Install Docker Compose
       - name: Install Docker Compose
         run: |
