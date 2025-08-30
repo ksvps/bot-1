@@ -27,16 +27,26 @@ jobs:
           sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose --version
-
-     # --- Restore old server data ---
+      
+      # --- Restore old server data ---
       - name: Pull latest Puffer Panel data
         if: ${{ always() }}
         run: |
           git fetch origin main
           git checkout origin/main -- pufferpanel.tar.gz.part-*
+
           # Join all parts into one tar.gz
           cat pufferpanel.tar.gz.part-* > pufferpanel.tar.gz
-          
+
+          # Remove old folder
+          rm -rf pufferpanel
+      
+          # Extract just like unzip
+          sudo tar -xzf pufferpanel.tar.gz
+
+          echo "Latest Puffer Panel data restored."
+          ls -l pufferpanel
+
       - name: Start Playitgg Container
         run: |
           docker-compose up -d
