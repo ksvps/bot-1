@@ -24,7 +24,8 @@ jobs:
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: "22.x"
+          check-latest: true
         
       # 4. Install Docker Compose
       - name: Install Docker Compose
