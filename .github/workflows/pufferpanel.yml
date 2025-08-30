@@ -101,6 +101,9 @@ jobs:
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
           BACKUP_NAME="pufferpanel_${TIMESTAMP}.tar.gz"
 
+          echo "Cleaning old backups..."
+          git rm -f pufferpanel_*.tar.gz.part-* || true
+
           echo "Creating backup: $BACKUP_NAME"
           sudo tar -czf - pufferpanel | split -b 90M - ${BACKUP_NAME}.part-
 
@@ -108,8 +111,8 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
           git add ${BACKUP_NAME}.part-*
-          git commit -m "Backup PufferPanel data ($TIMESTAMP)"
-          git push origin main || echo "Nothing to commit"
+          git commit -m "Backup PufferPanel data ($TIMESTAMP)" || echo "Nothing to commit"
+          git push origin main || echo "Nothing to push"
 
       # --- Auto-restart workflow ---
       - name: Restart Workflow
