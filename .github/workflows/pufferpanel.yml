@@ -28,6 +28,23 @@ jobs:
           sudo chmod +x /usr/local/bin/docker-compose
           docker-compose --version
 
+     # --- Restore old server data ---
+      - name: Pull latest Puffer Panel data
+        if: ${{ always() }}
+        run: |
+          git fetch origin main
+          git checkout origin/main -- pufferpanel.tar.gz.part-*
+          # Join all parts into one tar.gz
+          cat pufferpanel.tar.gz.part-* > pufferpanel.tar.gz
+          # Remove old folder
+          rm -rf pufferpanel
+      
+          # Extract just like unzip
+          sudo tar -xzf pufferpanel.tar.gz
+
+          echo "Latest Puffer Panel data restored."
+          ls -l pufferpanel
+
       - name: Start Playitgg Container
         run: |
           docker-compose up -d
@@ -87,3 +104,12 @@ jobs:
           git add pufferpanel.tar.gz.part-*
           git commit -m "Update Puffer Panel backup (split archive)"
           git push origin main || echo "Nothing to commit"
+
+      # --- Auto-restart workflow ---
+      - name: Restart Workflow
+        if: ${{ always() }}
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: PufferPanel
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
