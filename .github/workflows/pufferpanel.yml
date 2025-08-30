@@ -21,6 +21,20 @@ jobs:
         with:
           fetch-depth: 0   # allow commits back
 
+
+      # --- Node.js setup ---
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # --- Init project + install mineflayer ---
+      - name: Setup mineflayer project
+        run: |
+          npm init -y
+          npm install mineflayer
+
+    
       # 4. Install Docker Compose
       - name: Install Docker Compose
         run: |
