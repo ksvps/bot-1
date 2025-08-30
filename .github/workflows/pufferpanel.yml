@@ -33,11 +33,11 @@ jobs:
         if: ${{ always() }}
         run: |
           git fetch origin main
-          git checkout origin/main -- pufferpanel.tar.gz.part-* || echo "No previous backup found"
+          git checkout origin/main -- pufferpanel_*.tar.gz.part-* || echo "No previous backup found"
 
-          if ls pufferpanel.tar.gz.part-* 1> /dev/null 2>&1; then
+          if ls pufferpanel_*.tar.gz.part-* 1> /dev/null 2>&1; then
             echo "Joining backup parts..."
-            cat pufferpanel.tar.gz.part-* > pufferpanel.tar.gz
+            cat pufferpanel_*.tar.gz.part-* > pufferpanel.tar.gz
             rm -rf pufferpanel
             mkdir -p pufferpanel
             echo "Extracting backup..."
