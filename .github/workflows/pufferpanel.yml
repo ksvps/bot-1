@@ -35,12 +35,10 @@ jobs:
       - name: Ensure Docker & Docker Compose are available
         run: |
           set -euo pipefail
-          # docker should already be present on ubuntu-latest; install if missing
           if ! command -v docker >/dev/null 2>&1; then
             echo "Docker missing: installing (this may take a while)..."
             curl -fsSL https://get.docker.com | sh
           fi
-          # prefer modern plugin-based compose ("docker compose"), install plugin if absent
           if ! docker compose version >/dev/null 2>&1; then
             sudo apt-get update
             sudo apt-get install -y docker-compose-plugin || true
@@ -55,13 +53,9 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           git fetch --no-tags origin main
-
-          # check if any backup parts exist on origin/main
           REMOTE_PARTS=$(git ls-tree -r --name-only origin/main | grep '^pufferpanel_.*\.tar\.gz\.part-' || true)
-
           if [ -n "$REMOTE_PARTS" ]; then
             echo "Found previous backup parts in origin/main. Checking them out..."
-            # checkout only the files that exist on origin/main
             git checkout origin/main -- ${REMOTE_PARTS} || true
             PARTS=(pufferpanel_*.tar.gz.part-*)
             if [ ${#PARTS[@]} -gt 0 ]; then
@@ -81,7 +75,6 @@ jobs:
 
       - name: Ensure ownership for backup & runtime
         run: |
-          # if files were extracted as root, make them owned by runner so tar/read/write works
           sudo chown -R $(id -u):$(id -g) "${BACKUP_DIR}" || true
 
       - name: Start Playitgg Container
@@ -128,38 +121,32 @@ jobs:
 
       - name: Create Admin user (idempotent)
         run: |
-          # ignore non-zero exit: user may already exist
           docker exec pufferpanel /pufferpanel/pufferpanel user add \
             --name kshosting \
             --email kshosting@ksmail.com \
             --password 'kshosting@55' \
             --admin || true
 
-     - name: Tear down containers (clean runner)
+      - name: Sleep (keep container alive)
         if: ${{ always() }}
         run: |
           sleep 20000
-          
+
       - name: Tear down containers (clean runner)
         if: ${{ always() }}
         run: |
           cd pufferpanel || true
           docker compose down || true
-          
+
       - name: Create compressed backup and split into parts
         shell: bash
         run: |
           set -euo pipefail
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
           BACKUP_NAME="${BACKUP_PREFIX}_${TIMESTAMP}.tar.gz"
-
-          # Make sure runner can read pufferpanel files (fix ownership if needed)
           sudo chown -R $(id -u):$(id -g) "${BACKUP_DIR}" || true
-
-          echo "Creating compressed backup stream and splitting into ${BACKUP_SPLIT_SIZE} parts..."
-          # Create a streaming tar.gz and split; resulting files: pufferpanel_YYYY-...tar.gz.part-*
+          echo "Creating compressed backup stream..."
           tar -czf - "${BACKUP_DIR}" | split -b "${BACKUP_SPLIT_SIZE}" - "${BACKUP_NAME}.part-"
-          echo "Created parts:"
           ls -lh ${BACKUP_NAME}.part-* || true
 
       - name: Commit & push backup (guarantee a commit)
@@ -167,26 +154,18 @@ jobs:
         run: |
           set -euo pipefail
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
-          BACKUP_GLOB="${BACKUP_PREFIX}_${TIMESTAMP}.tar.gz.part-*"
-          # add any new part files
           git add ${BACKUP_PREFIX}_*.tar.gz.part-* || true
-
-          # If there are staged changes, commit them; otherwise create an allow-empty "heartbeat" commit
           if git diff --staged --quiet; then
-            echo "No file changes detected; creating empty heartbeat commit so workflow run is recorded."
             git commit --allow-empty -m "Heartbeat backup: ${TIMESTAMP}" || true
           else
             git commit -m "Backup PufferPanel data (${TIMESTAMP})" || true
           fi
-
-          # Try normal push first; if it fails try an authenticated push URL
           if ! git push origin HEAD:main; then
-            echo "git push failed; retrying with explicit token-auth remote..."
             git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
             git push origin HEAD:main
           fi
 
-      - name: Upload backup parts as workflow artifact (fallback & retention)
+      - name: Upload backup parts as workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: pufferpanel-backup-${{ github.run_id }}
