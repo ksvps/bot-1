@@ -4,87 +4,58 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
   actions: write
+  contents: write   # required for pushing changes back
 
 concurrency:
   group: pufferpanel
   cancel-in-progress: true
-
+  
 jobs:
   pufferpanel:
     runs-on: ubuntu-latest
     timeout-minutes: 355
-    env:
-      BACKUP_PREFIX: pufferpanel
-      BACKUP_SPLIT_SIZE: 90M
-      BACKUP_DIR: pufferpanel
     steps:
-
-      - name: Checkout repository (full history & push creds)
-        uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v3
         with:
-          fetch-depth: 0
-          persist-credentials: true
-
-      - name: Configure git author (used for commits)
+          fetch-depth: 0   # allow commits back
+    
+      # 4. Install Docker Compose
+      - name: Install Docker Compose
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Ensure Docker & Docker Compose are available
+          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
+      
+      # --- Restore old server data ---
+      - name: Pull latest Puffer Panel data
+        if: ${{ always() }}
         run: |
-          set -euo pipefail
-          if ! command -v docker >/dev/null 2>&1; then
-            echo "Docker missing: installing (this may take a while)..."
-            curl -fsSL https://get.docker.com | sh
-          fi
-          if ! docker compose version >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y docker-compose-plugin || true
-          fi
-          echo "Docker and compose available:"
-          docker --version || true
-          docker compose version || true
-
-      - name: Restore latest backup parts from origin/main (if present)
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          git fetch --no-tags origin main
-          REMOTE_PARTS=$(git ls-tree -r --name-only origin/main | grep '^pufferpanel_.*\.tar\.gz\.part-' || true)
-          if [ -n "$REMOTE_PARTS" ]; then
-            echo "Found previous backup parts in origin/main. Checking them out..."
-            git checkout origin/main -- ${REMOTE_PARTS} || true
-            PARTS=(pufferpanel_*.tar.gz.part-*)
-            if [ ${#PARTS[@]} -gt 0 ]; then
-              echo "Joining ${#PARTS[@]} parts into pufferpanel.tar.gz..."
-              cat "${PARTS[@]}" > pufferpanel.tar.gz
-              mkdir -p "${BACKUP_DIR}"
-              echo "Extracting backup..."
-              sudo tar -xzf pufferpanel.tar.gz -C .
-              echo "Restored ${BACKUP_DIR} contents:"
-              ls -l "${BACKUP_DIR}" || true
-            else
-              echo "No part files found locally after checkout."
-            fi
+          git fetch origin main
+          git checkout origin/main -- pufferpanel_*.tar.gz.part-* || echo "No previous backup found"
+          if ls pufferpanel_*.tar.gz.part-* 1> /dev/null 2>&1; then
+            echo "Joining backup parts..."
+            cat pufferpanel_*.tar.gz.part-* > pufferpanel.tar.gz
+            rm -rf pufferpanel
+            mkdir -p pufferpanel
+            echo "Extracting backup..."
+            sudo tar -xzf pufferpanel.tar.gz -C .
+            echo "Latest Puffer Panel data restored."
+            ls -l pufferpanel
           else
-            echo "No previous backup parts found on origin/main — starting fresh."
+            echo "No backup found, starting fresh."
           fi
-
-      - name: Ensure ownership for backup & runtime
-        run: |
-          sudo chown -R $(id -u):$(id -g) "${BACKUP_DIR}" || true
-
       - name: Start Playitgg Container
         run: |
           docker-compose up -d
-
-      - name: Create docker-compose for PufferPanel
+          
+      # 7. Create Docker Compose file
+      - name: Create Docker Compose for PufferPanel
         run: |
           mkdir -p pufferpanel
-          cat > pufferpanel/docker-compose.yml <<'EOF'
+          cd pufferpanel
+          cat > docker-compose.yml <<'EOF'
           version: '3.8'
           services:
             pufferpanel:
@@ -100,77 +71,40 @@ jobs:
               environment:
                 PUFFER_ADMIN_EMAIL: "admin@example.com"
           EOF
-
-      - name: Start PufferPanel (container)
+      # 8. Start PufferPanel
+      - name: Start PufferPanel Container
         run: |
           cd pufferpanel
-          docker compose up -d
-
-      - name: Wait for PufferPanel HTTP to become healthy (timeout ~2 minutes)
-        run: |
-          set -euo pipefail
-          MAX_WAIT=120
-          for i in $(seq 1 $MAX_WAIT); do
-            if curl -sSf http://localhost:8080/ >/dev/null 2>&1; then
-              echo "PufferPanel is responding on http://localhost:8080"
-              break
-            fi
-            echo "Waiting for PufferPanel... ($i/$MAX_WAIT)"
-            sleep 2
-          done
-
-      - name: Create Admin user (idempotent)
+          docker-compose up -d
+      # 9. Create Admin User
+      - name: Create Admin User
         run: |
           docker exec pufferpanel /pufferpanel/pufferpanel user add \
-            --name kshosting \
-            --email kshosting@ksmail.com \
-            --password 'kshosting@55' \
-            --admin || true
-
-      - name: Sleep (keep container alive)
-        if: ${{ always() }}
+          --name kshosting \
+          --email kshosting@ksmail.com \
+          --password kshosting@55 \
+          --admin || echo "User may already exist"
+      # 11. Run LocalTunnel (keep alive)
+      - name: Sleep 20000s
         run: |
           sleep 20000
-
-      - name: Tear down containers (clean runner)
+          
+      # 12. Save & Commit PufferPanel Data
+      - name: Commit Puffer Panel
         if: ${{ always() }}
         run: |
-          cd pufferpanel || true
-          docker compose down || true
-
-      - name: Create compressed backup and split into parts
-        shell: bash
-        run: |
-          set -euo pipefail
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
-          BACKUP_NAME="${BACKUP_PREFIX}_${TIMESTAMP}.tar.gz"
-          sudo chown -R $(id -u):$(id -g) "${BACKUP_DIR}" || true
-          echo "Creating compressed backup stream..."
-          tar -czf - "${BACKUP_DIR}" | split -b "${BACKUP_SPLIT_SIZE}" - "${BACKUP_NAME}.part-"
-          ls -lh ${BACKUP_NAME}.part-* || true
-
-      - name: Commit & push backup (guarantee a commit)
-        shell: bash
-        run: |
-          set -euo pipefail
-          TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
-          git add ${BACKUP_PREFIX}_*.tar.gz.part-* || true
-          if git diff --staged --quiet; then
-            git commit --allow-empty -m "Heartbeat backup: ${TIMESTAMP}" || true
-          else
-            git commit -m "Backup PufferPanel data (${TIMESTAMP})" || true
-          fi
-          if ! git push origin HEAD:main; then
-            git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
-            git push origin HEAD:main
-          fi
-
-      - name: Upload backup parts as workflow artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: pufferpanel-backup-${{ github.run_id }}
-          path: pufferpanel_*.tar.gz.part-*
-
+          BACKUP_NAME="pufferpanel_${TIMESTAMP}.tar.gz"
+          echo "Cleaning old backups..."
+          git rm -f pufferpanel_*.tar.gz.part-* || true
+          echo "Creating backup: $BACKUP_NAME"
+          sudo tar -czf - pufferpanel | split -b 90M - ${BACKUP_NAME}.part-
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add ${BACKUP_NAME}.part-*
+          git commit -m "Backup PufferPanel data ($TIMESTAMP)" || echo "Nothing to commit"
+          git push origin main || echo "Nothing to push"
+      # --- Auto-restart workflow ---
       - name: Restart Workflow
         if: ${{ always() }}
         uses: benc-uk/workflow-dispatch@v1
