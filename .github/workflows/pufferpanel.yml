@@ -171,7 +171,7 @@ jobs:
           name: pufferpanel-backup-${{ github.run_id }}
           path: pufferpanel_*.tar.gz.part-*
 
-      - name: Re-dispatch workflow (optional: keep running periodic backups)
+      - name: Restart Workflow
         if: ${{ always() }}
         uses: benc-uk/workflow-dispatch@v1
         with:
