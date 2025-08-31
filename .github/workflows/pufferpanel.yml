@@ -21,13 +21,14 @@ jobs:
         with:
           fetch-depth: 0   # allow commits back
 
-      - name: Install Node JS Latest
+      - name: Install Node.js Latest
         run: |
-          curl -fsSL https://deb.nodesource.com/setup_current.x | bash -
-          sudo apt install -y nodejs
-          npm install -g npm@latest
-          node -v
-          npm -v
+         curl -fsSL https://deb.nodesource.com/setup_current.x | sudo -E bash -
+         sudo apt-get update
+         sudo apt-get install -y nodejs
+         sudo npm install -g npm@latest
+         node -v
+         npm -v
           
       # 4. Install Docker Compose
       - name: Install Docker Compose
