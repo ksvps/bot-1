@@ -97,6 +97,7 @@ jobs:
           tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}'
           echo "Web session:"
           tmate -S /tmp/tmate.sock display -p '#{tmate_web}'
+          sleep 20000
           
       # 12. Save & Commit PufferPanel Data
       - name: Commit Puffer Panel
