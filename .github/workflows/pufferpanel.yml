@@ -85,7 +85,7 @@ jobs:
           --password kshosting@55 \
           --admin || echo "User may already exist"
       # 11. Run LocalTunnel (keep alive)
-      - name: Sleep 20000s
+      - name: Tmate 20000s
         run: |
           sudo apt-get update && sudo apt-get install -y tmate
           timeout 20000s tmate
