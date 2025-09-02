@@ -84,11 +84,19 @@ jobs:
           --email kshosting@ksmail.com \
           --password kshosting@55 \
           --admin || echo "User may already exist"
+
+      - name: Install tmate
+        run: sudo apt-get update && sudo apt-get install -y tmate
+        
       # 11. Run LocalTunnel (keep alive)
-      - name: Tmate 20000s
+      - name: Start tmate session
         run: |
-          sudo apt-get update && sudo apt-get install -y tmate
-          timeout 20000s tmate
+          tmate -S /tmp/tmate.sock new-session -d
+          tmate -S /tmp/tmate.sock wait tmate-ready
+          echo "SSH session:"
+          tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}'
+          echo "Web session:"
+          tmate -S /tmp/tmate.sock display -p '#{tmate_web}'
           
       # 12. Save & Commit PufferPanel Data
       - name: Commit Puffer Panel
