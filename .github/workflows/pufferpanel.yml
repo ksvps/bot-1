@@ -16,12 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
-      # --- Checkout repository ---
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
       # --- Install Docker Compose ---
       - name: Install Docker Compose
         run: |
@@ -33,6 +27,7 @@ jobs:
 
       # --- Restore latest backup from Releases ---
       - name: Download latest backup from Releases
+        continue-on-error: true
         uses: robinraju/release-downloader@v1.11
         with:
           tag: backups
@@ -101,25 +96,36 @@ jobs:
            tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}' && \
            echo "Web access:" && \
            tmate -S /tmp/tmate.sock display -p '#{tmate_web}' && \
-           sleep 20000) &
+           sleep 20000
 
       # --- Backup PufferPanel Data ---
       - name: Backup PufferPanel Data
         if: ${{ always() }}
         run: |
           echo "Creating multi-part backup (max 1.75GB per file)..."
-          tar -czf - pufferpanel | split -b 1750M - "pane-data-"
+          sudo tar -czf - pufferpanel | split -b 1750M - "backup-"
           
           # Rename split files to pane-data-1.part, pane-data-2.part, ...
           i=1
-          for f in pane-data-*; do
+          for f in backup-*; do
             mv "$f" "pane-data-${i}.part"
             i=$((i+1))
           done
           
           ls -lh pane-data-*.part
 
-      # --- Upload backup to Release ---
+      # --- Delete old assets from Release ---
+      - name: Delete old backup assets
+        if: ${{ always() }}
+        run: |
+          assets=$(gh release view backups --json assets --jq '.assets[].name' || echo "")
+          for asset in $assets; do
+            gh release delete-asset backups "$asset" -y || true
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- Upload new backup to Release ---
       - name: Upload to GitHub Release
         if: ${{ always() }}
         uses: softprops/action-gh-release@v1
