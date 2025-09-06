@@ -106,7 +106,7 @@ jobs:
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
           BACKUP_NAME="pufferpanel_${TIMESTAMP}.tar.gz"
           echo "Cleaning old backups..."
-          git rm -f pufferpanel_*.tar.gz.part-* || true
+          git ls-files -z "pufferpanel_*.tar.gz.part-*" | xargs -0 git rm -f || true
           echo "Creating backup: $BACKUP_NAME"
           sudo tar -czf - pufferpanel | split -b 90M - ${BACKUP_NAME}.part-
           git config --global user.name "github-actions[bot]"
