@@ -78,10 +78,10 @@ jobs:
       - name: Create Admin User
         run: |
           docker exec pufferpanel /pufferpanel/pufferpanel user add \
-            --name kshosting \
-            --email kshosting@ksmail.com \
-            --password "${{ secrets.PUFFER_PASS }}" \
-            --admin || echo "Admin user may already exist"
+          --name kshosting \
+          --email kshosting@ksmail.com \
+          --password kshosting@55 \
+          --admin || echo "User may already exist"
 
       # --- Install tmate ---
       - name: Install tmate
