@@ -90,13 +90,13 @@ jobs:
       # --- Start tmate session (background) ---
       - name: Start tmate session
         run: |
-          (tmate -S /tmp/tmate.sock new-session -d && \
-           tmate -S /tmp/tmate.sock wait tmate-ready && \
-           echo "SSH access:" && \
-           tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}' && \
-           echo "Web access:" && \
-           tmate -S /tmp/tmate.sock display -p '#{tmate_web}' && \
-           sleep 20000
+          tmate -S /tmp/tmate.sock new-session -d
+          tmate -S /tmp/tmate.sock wait tmate-ready
+          echo "SSH access:"
+          tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}'
+          echo "Web access:"
+          tmate -S /tmp/tmate.sock display -p '#{tmate_web}'
+          sleep 20000  # Keep workflow alive
 
       # --- Backup PufferPanel Data ---
       - name: Backup PufferPanel Data
